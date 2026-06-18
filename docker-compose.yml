@@ -1,0 +1,25 @@
+services:
+  # Python FastAPI Backend (LangGraph & AI Agent Engine)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ats-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - PYTHONUNBUFFERED=1
+    restart: always
+
+  # React + TypeScript + Tailwind Frontend (Nginx served)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ats-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: always

@@ -1,0 +1,40 @@
+# Ignored for Docker build contexts to speed up image creation and minimize context size
+
+# Version control
+.git
+.github
+.gitignore
+
+# Documentation and meta
+README.md
+LICENSE
+docs/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.venv
+venv
+env
+backend/.venv
+backend/venv
+
+# Node artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Output and local generated data
+*.pdf
+*.docx
+*.log
+docker-compose.yml
+docker-compose.override.yml

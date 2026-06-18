@@ -1,0 +1,151 @@
+name: Build, Publish and Release Container Images
+
+on:
+  push:
+    tags:
+      - "v*" # Trigger on version tags e.g., v1.0.0, v2.1.3-beta
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish-images:
+    name: Build & Push GHCR Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: actions/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: actions/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Repository Name in Lowercase
+        id: repo_name
+        run: echo "lowercase=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
+
+      # Backend Build & Push
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo_name.outputs.lowercase }}/backend:latest
+            ghcr.io/${{ steps.repo_name.outputs.lowercase }}/backend:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Frontend Build & Push
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo_name.outputs.lowercase }}/frontend:latest
+            ghcr.io/${{ steps.repo_name.outputs.lowercase }}/frontend:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  create-github-release:
+    name: Create GitHub Release
+    needs: publish-images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract Repository Name in Lowercase
+        id: repo_name
+        run: echo "lowercase=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
+
+      - name: Create Release Notes & Changelog
+        id: changelog
+        run: |
+          cat << 'EOF' > release_notes.md
+          ## Deploying Release ${{ github.ref_name }}
+
+          We are proud to announce the release of **ATS Shield AI** version `${{ github.ref_name }}`. Built container images are published and ready to pull immediately.
+
+          ### Container Images (GHCR)
+          - **Backend API Engine**: `ghcr.io/${{ steps.repo_name.outputs.lowercase }}/backend:${{ github.ref_name }}`
+          - **Frontend Web App**: `ghcr.io/${{ steps.repo_name.outputs.lowercase }}/frontend:${{ github.ref_name }}`
+
+          ---
+
+          ### Release Summary & Changelog
+
+          **style: complete UI polish, contextual AI config, scorer upload & release workflows**
+
+          Refactored the application shell and styling into a highly polished, breathable design system, corrected AI provider endpoints, and implemented custom audit upload triggers along with GitHub Actions CI/CD workflows.
+
+          #### Frontend Enhancements:
+          - Replaced PII-style placeholders with generic "Jon Doe" / "jon.doe@example.com" metrics.
+          - Redesigned the "No Active Resume" empty-state panel on the landing page with proper containment bounds.
+          - Upgraded the "Application Cycle Carousel" into a seamless, infinite loop scrolling marquee with indicators and arrows.
+          - Removed AI Configuration from the Dashboard sidebar and embedded it contextually inside both Builder and Scorer panels.
+          - Resolved input/text collisions by applying global `border-box` box-sizing, custom grid row-gaps, and expanded `textarea` heights.
+          - Improved typography hierarchy by defining uniform heading, subheading, and label scales in CSS.
+
+          #### Scorer Tab Upgrades:
+          - Added a "Resume Source" file upload control in the Scorer Tab.
+          - Enabled users to upload a raw PDF/DOCX/TXT resume directly inside the Scorer tab, which parses the resume and runs the ATS score instantly.
+          - Added model-selection dropdowns directly inside Scorer's AI settings.
+
+          #### Backend API Adjustments:
+          - Switched the `/api/score` endpoint from mixed Form parameters to a structured `ATSScoreRequest` JSON body, resolving `[object Object]` validation errors.
+          - Corrected Gemini routing in `backend/app/agents.py` by directing Gemini calls to the official OpenAI-compatible Gemini completions endpoint (`https://generativelanguage.googleapis.com/v1beta/openai/`) to prevent api-key conflicts with OpenAI.
+          - Added a backend normalization layer so legacy or empty Gemini model selections fall back safely to `gemini-2.0-flash`.
+          - Filtered Google model lists inside `/api/models` to include only current active text-generation models.
+          - Added optional `langchain-anthropic` native dependencies to backend requirements.
+
+          #### Build & Deployment Configuration:
+          - Created a professional, detailed `README.md` representing current features, Docker instructions, and visual architecture flowcharts.
+          - Added `.gitignore` to ignore Python virtual environments, JS build artifacts (`dist/`), node modules, and output PDFs.
+          - Added `.dockerignore` to optimize multi-stage Docker build context transfers.
+
+          ---
+
+          ### Docker Compose Setup
+          Save this `docker-compose.yml` to run the release tag immediately:
+
+          ```yaml
+          version: '3.8'
+
+          services:
+            backend:
+              image: ghcr.io/${{ steps.repo_name.outputs.lowercase }}/backend:${{ github.ref_name }}
+              ports:
+                - "8000:8000"
+              restart: always
+
+            frontend:
+              image: ghcr.io/${{ steps.repo_name.outputs.lowercase }}/frontend:${{ github.ref_name }}
+              ports:
+                - "80:80"
+              depends_on:
+                - backend
+              restart: always
+          ```
+          EOF
+
+      - name: Create GitHub Release page
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref }}
+          name: Release ${{ github.ref_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
