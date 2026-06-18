@@ -2,6 +2,9 @@ name: Build, Publish and Release Container Images
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - "v*" # Trigger on version tags e.g., v1.0.0, v2.1.3-beta
 
